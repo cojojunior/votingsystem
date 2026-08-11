@@ -1,0 +1,32 @@
+// vite.config.ts
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+
+export default defineConfig({
+  plugins: [
+    react(),
+    tailwindcss(), // Add Tailwind v4 plugin
+  ],
+  server: {
+    port: 3000,
+    proxy: {
+      "/api": {
+        target: "http://localhost:5000",
+        changeOrigin: true,
+      },
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-dom", "react-router-dom"],
+          ui: ["@supabase/supabase-js", "@tanstack/react-query"],
+        },
+      },
+    },
+    sourcemap: true,
+    chunkSizeWarningLimit: 1000,
+  },
+});
