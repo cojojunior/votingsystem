@@ -16,7 +16,7 @@ import {
   Award,
 } from "lucide-react";
 
-export const StudentDashboard: React.FC = () => {
+const StudentDashboard: React.FC = () => {
   const { user } = useAuth();
   const { hasVoted, voteSubmitted, checkVotingStatus, isLoading } = useVoting();
   const { currentSession, sessions, electionStatus } = useSessionStore();
@@ -24,7 +24,7 @@ export const StudentDashboard: React.FC = () => {
 
   useEffect(() => {
     checkVotingStatus();
-  }, []);
+  }, [checkVotingStatus]);
 
   useEffect(() => {
     if (currentSession) {
@@ -62,6 +62,19 @@ export const StudentDashboard: React.FC = () => {
   };
 
   const sessionStatus = getSessionStatus(currentSession);
+
+  // Get total number of sessions
+  const totalSessions = sessions?.length || 0;
+
+  // Get current session index
+  const currentSessionIndex = sessions?.findIndex(
+    (s) => s.id === currentSession?.id,
+  );
+
+  // Get next session if any
+  const nextSession = sessions?.find(
+    (s) => s.status === "pending" && new Date(s.startTime) > new Date(),
+  );
 
   if (isLoading) {
     return (
@@ -132,6 +145,12 @@ export const StudentDashboard: React.FC = () => {
                 <div>
                   <p className="text-sm text-gray-500">Your Session</p>
                   <p className="font-semibold">{currentSession.name}</p>
+                  {currentSessionIndex !== undefined &&
+                    currentSessionIndex >= 0 && (
+                      <p className="text-xs text-gray-400">
+                        Session {currentSessionIndex + 1} of {totalSessions}
+                      </p>
+                    )}
                 </div>
               </div>
             </Card>
@@ -148,6 +167,11 @@ export const StudentDashboard: React.FC = () => {
                         ? "Not Started"
                         : "Ended"}
                   </p>
+                  {nextSession && sessionStatus === "not_started" && (
+                    <p className="text-xs text-gray-400">
+                      Next session: {nextSession.name}
+                    </p>
+                  )}
                 </div>
               </div>
             </Card>
@@ -171,10 +195,55 @@ export const StudentDashboard: React.FC = () => {
                         ? "Pending"
                         : "Closed"}
                   </p>
+                  {electionStatus === "paused" && (
+                    <p className="text-xs text-yellow-600">
+                      ⚠️ Election Paused
+                    </p>
+                  )}
                 </div>
               </div>
             </Card>
           </div>
+        )}
+
+        {/* Sessions Overview - Using the 'sessions' variable */}
+        {sessions && sessions.length > 0 && (
+          <Card className="mb-6">
+            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <Award className="h-5 w-5 text-upsa-blue" />
+              All Sessions
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {sessions.map((session) => {
+                const isActive = session.id === currentSession?.id;
+                const isPast = new Date(session.endTime) < new Date();
+                const isFuture = new Date(session.startTime) > new Date();
+
+                return (
+                  <div
+                    key={session.id}
+                    className={`p-3 rounded-lg border ${
+                      isActive
+                        ? "border-green-500 bg-green-50"
+                        : isPast
+                          ? "border-gray-300 bg-gray-50"
+                          : "border-blue-300 bg-blue-50"
+                    }`}>
+                    <p className="font-medium text-sm">{session.name}</p>
+                    <p className="text-xs text-gray-600">
+                      {new Date(session.startTime).toLocaleTimeString()} -{" "}
+                      {new Date(session.endTime).toLocaleTimeString()}
+                    </p>
+                    <p className="text-xs mt-1">
+                      {isActive && "🟢 Active"}
+                      {isPast && "✅ Completed"}
+                      {isFuture && "⏳ Upcoming"}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
         )}
 
         {/* Election Information */}
@@ -215,6 +284,10 @@ export const StudentDashboard: React.FC = () => {
                   {hasVoted || voteSubmitted ? "Completed" : "Pending"}
                 </span>
               </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Total Sessions</span>
+                <span className="font-medium">{totalSessions}</span>
+              </div>
             </div>
           </Card>
 
@@ -227,9 +300,11 @@ export const StudentDashboard: React.FC = () => {
                 </Link>
               )}
               {electionStatus === "completed" && (
-                <Button variant="secondary" fullWidth>
-                  View Results
-                </Button>
+                <Link to="/results" className="block">
+                  <Button variant="secondary" fullWidth>
+                    View Results
+                  </Button>
+                </Link>
               )}
               <Button
                 variant="secondary"
@@ -264,3 +339,5 @@ export const StudentDashboard: React.FC = () => {
     </div>
   );
 };
+
+export default StudentDashboard;

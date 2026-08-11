@@ -7,7 +7,7 @@ import { votingAPI } from "../../api/voting";
 import { VoteResult } from "../../types/voting.types";
 import { Trophy, Award, BarChart, Users, CheckCircle } from "lucide-react";
 
-export const ResultsPage: React.FC = () => {
+const ResultsPage: React.FC = () => {
   const [results, setResults] = useState<VoteResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -315,3 +315,5 @@ export const ResultsPage: React.FC = () => {
     </div>
   );
 };
+
+export default ResultsPage;

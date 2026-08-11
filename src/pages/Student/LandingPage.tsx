@@ -1,77 +1,87 @@
 // src/pages/Student/LandingPage.tsx
-import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../store/authStore';
-import { Button } from '../../components/common/Button';
-import { Card } from '../../components/common/Card';
-import { Shield, Users, Award, Clock, CheckCircle, TrendingUp } from 'lucide-react';
+import React, { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuthStore } from "../../store/authStore";
+import { Button } from "../../components/common/Button";
+import { Card } from "../../components/common/Card";
+import {
+  Shield,
+  Users,
+  Award,
+  Clock,
+  CheckCircle,
+  TrendingUp,
+} from "lucide-react";
 
-export const LandingPage: React.FC = () => {
+const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/dashboard');
+      navigate("/dashboard");
     }
   }, [isAuthenticated, navigate]);
 
   const features = [
     {
       icon: Shield,
-      title: 'Secure Voting',
-      description: 'Protected by OTP authentication and rate limiting for maximum security'
+      title: "Secure Voting",
+      description:
+        "Protected by OTP authentication and rate limiting for maximum security",
     },
     {
       icon: Users,
-      title: 'Student-Only Access',
-      description: 'Exclusively for UPSA students with valid @upsamail.edu addresses'
+      title: "Student-Only Access",
+      description:
+        "Exclusively for UPSA students with valid @upsamail.edu addresses",
     },
     {
       icon: Clock,
-      title: 'Session-Based Voting',
-      description: 'Organized voting sessions to ensure smooth system performance'
+      title: "Session-Based Voting",
+      description:
+        "Organized voting sessions to ensure smooth system performance",
     },
     {
       icon: CheckCircle,
-      title: 'One Vote Per Student',
-      description: 'Each student can vote only once to maintain election integrity'
+      title: "One Vote Per Student",
+      description:
+        "Each student can vote only once to maintain election integrity",
     },
     {
       icon: Award,
-      title: 'Multiple Positions',
-      description: 'Vote for candidates across various leadership positions'
+      title: "Multiple Positions",
+      description: "Vote for candidates across various leadership positions",
     },
     {
       icon: TrendingUp,
-      title: 'Real-Time Updates',
-      description: 'Live voting statistics and progress tracking for admins'
-    }
+      title: "Real-Time Updates",
+      description: "Live voting statistics and progress tracking for admins",
+    },
   ];
 
   return (
     <div className="min-h-screen">
       {/* Hero Section with Background Image */}
-      <div 
+      <div
         className="relative min-h-screen flex items-center justify-center"
         style={{
           backgroundImage: `url('/image.png')`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-        }}
-      >
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+        }}>
         {/* Dark Overlay for better text readability */}
         <div className="absolute inset-0 bg-black/60"></div>
-        
-        {/* Decorative pattern overlay */}        
+
+        {/* Decorative pattern overlay */}
         <div className="container mx-auto px-4 py-20 relative z-10">
           <div className="text-center text-white">
             <div className="mb-6">
               {/* Logo */}
-              <img 
-                src="/logo.svg" 
-                alt="UPSA Logo" 
+              <img
+                src="/logo.svg"
+                alt="UPSA Logo"
                 className="h-24 w-24 mx-auto mb-4 drop-shadow-lg"
               />
               <h1 className="text-5xl md:text-6xl font-bold mb-4 text-shadow">
@@ -82,28 +92,26 @@ export const LandingPage: React.FC = () => {
               </p>
             </div>
             <p className="text-lg text-blue-100 max-w-2xl mx-auto mb-8 text-shadow">
-              Secure, transparent, and efficient student elections. 
-              Cast your vote with confidence.
+              Secure, transparent, and efficient student elections. Cast your
+              vote with confidence.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button 
-                size="lg" 
+              <Button
+                size="lg"
                 className="bg-white text-upsa-blue hover:bg-blue-50 shadow-lg"
-                onClick={() => navigate('/login')}
-              >
+                onClick={() => navigate("/login")}>
                 Get Started
               </Button>
-              <Button 
-                size="lg" 
-                variant="secondary" 
+              <Button
+                size="lg"
+                variant="secondary"
                 className="bg-transparent border-2 border-white text-white hover:bg-white/10 shadow-lg"
                 onClick={() => {
-                  const featuresSection = document.getElementById('features');
+                  const featuresSection = document.getElementById("features");
                   if (featuresSection) {
-                    featuresSection.scrollIntoView({ behavior: 'smooth' });
+                    featuresSection.scrollIntoView({ behavior: "smooth" });
                   }
-                }}
-              >
+                }}>
                 Learn More
               </Button>
             </div>
@@ -119,7 +127,8 @@ export const LandingPage: React.FC = () => {
               Why Choose Our Voting System
             </h2>
             <p className="text-gray-600 max-w-2xl mx-auto">
-              Built with cutting-edge technology to ensure fair and secure elections
+              Built with cutting-edge technology to ensure fair and secure
+              elections
             </p>
           </div>
 
@@ -176,14 +185,16 @@ export const LandingPage: React.FC = () => {
       <footer className="bg-upsa-blue text-white py-8">
         <div className="container mx-auto px-4 text-center">
           <p className="text-blue-200 text-sm">
-            {'\u00A9'} {new Date().getFullYear()} University of Professional Studies, Accra.
-            All rights reserved.
+            {"\u00A9"} {new Date().getFullYear()} University of Professional
+            Studies, Accra. All rights reserved.
           </p>
           <p className="text-blue-300 text-xs mt-2">
-            Secure Voting System v2.0 | Powered by React {'&'} Supabase
+            Secure Voting System v2.0 | Powered by React {"&"} Supabase
           </p>
         </div>
       </footer>
     </div>
   );
 };
+
+export default LandingPage; // <-- Changed from named export to default export

@@ -6,7 +6,7 @@ import { Card } from "../../components/common/Card";
 import { LoadingSpinner } from "../../components/common/LoadingSpinner";
 import { validateUPSAEmail } from "../../utils/validators/emailValidator";
 
-export const LoginPage: React.FC = () => {
+const LoginPage: React.FC = () => {
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [showOTPInput, setShowOTPInput] = useState(false);
@@ -170,3 +170,5 @@ export const LoginPage: React.FC = () => {
     </div>
   );
 };
+
+export default LoginPage;

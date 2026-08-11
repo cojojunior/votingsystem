@@ -10,7 +10,7 @@ import { SessionTimer } from "../../components/voting/SessionTimer";
 import { CandidateCard } from "../../components/voting/CandidateCard";
 import { useSessionStore } from "../../store/sessionStore";
 
-export const VotingPage: React.FC = () => {
+const VotingPage: React.FC = () => {
   const {
     positions,
     selectedCandidates,
@@ -224,3 +224,5 @@ export const VotingPage: React.FC = () => {
     </div>
   );
 };
+
+export default VotingPage;

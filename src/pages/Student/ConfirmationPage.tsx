@@ -12,7 +12,7 @@ import {
   Shield,
 } from "lucide-react";
 
-export const ConfirmationPage: React.FC = () => {
+const ConfirmationPage: React.FC = () => {
   const navigate = useNavigate();
   const [countdown, setCountdown] = useState(10);
 
@@ -133,3 +133,5 @@ export const ConfirmationPage: React.FC = () => {
     </div>
   );
 };
+
+export default ConfirmationPage;
