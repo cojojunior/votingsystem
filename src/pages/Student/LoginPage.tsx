@@ -1,30 +1,41 @@
 // src/pages/Student/LoginPage.tsx
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { Button } from "../../components/common/Button";
 import { Card } from "../../components/common/Card";
 import { LoadingSpinner } from "../../components/common/LoadingSpinner";
-import { validateUPSAEmail } from "../../utils/validators/emailValidator";
+import {
+  validateStudentId,
+  buildStudentEmail,
+  formatStudentId,
+} from "../../utils/validators/emailValidator";
 
 const LoginPage: React.FC = () => {
-  const [email, setEmail] = useState("");
+  const navigate = useNavigate();
+  const [studentId, setStudentId] = useState("");
   const [otp, setOtp] = useState("");
   const [showOTPInput, setShowOTPInput] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
-  const { requestOTP, verifyOTP, isLoading, rateLimit } = useAuth();
+  const { requestOTP, verifyOTP, isLoading, rateLimit, user } = useAuth();
 
   const handleRequestOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError(null);
 
-    if (!validateUPSAEmail(email)) {
-      setLocalError("Please enter a valid @upsamail.edu address");
+    const formattedId = formatStudentId(studentId);
+
+    if (!validateStudentId(formattedId)) {
+      setLocalError("Please enter a valid numeric Student ID (e.g., 10309003)");
       return;
     }
 
+    const fullEmail = buildStudentEmail(formattedId);
+
     try {
-      await requestOTP(email);
+      await requestOTP(fullEmail);
       setShowOTPInput(true);
+      setLocalError(null);
     } catch (error: any) {
       setLocalError(error.message || "Failed to send OTP. Please try again.");
     }
@@ -39,10 +50,17 @@ const LoginPage: React.FC = () => {
       return;
     }
 
+    const formattedId = formatStudentId(studentId);
+    const fullEmail = buildStudentEmail(formattedId);
+
     try {
-      await verifyOTP(email, otp);
-      // Redirect to voting page
-      window.location.href = "/vote";
+      const result = await verifyOTP(fullEmail, otp);
+      if (result.success) {
+        // Redirect to voting dashboard
+        navigate("/dashboard");
+      } else {
+        setLocalError("OTP verification failed. Please try again.");
+      }
     } catch (error: any) {
       setLocalError(error.message || "Invalid OTP. Please try again.");
     }
@@ -51,8 +69,17 @@ const LoginPage: React.FC = () => {
   // Show loading spinner when authenticating
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-upsa-blue to-blue-900 flex items-center justify-center p-4">
-        <div className="text-center">
+      <div
+        className="min-h-screen flex items-center justify-center p-4 relative"
+        style={{
+          backgroundImage: `url('/images/bg.jpg')`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          backgroundAttachment: "fixed",
+        }}>
+        <div className="absolute inset-0 bg-black/50"></div>
+        <div className="relative z-10 text-center">
           <LoadingSpinner size="lg" className="mx-auto" />
           <p className="text-white mt-4">Please wait...</p>
         </div>
@@ -61,33 +88,54 @@ const LoginPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-upsa-blue to-blue-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div
+      className="min-h-screen flex items-center justify-center p-4 relative"
+      style={{
+        backgroundImage: `url('/images/bg.jpg')`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundAttachment: "fixed",
+      }}>
+      {/* Dark Overlay for better text readability */}
+      <div className="absolute inset-0 bg-black/60"></div>
+
+      <div className="relative z-10 w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">
+          <h1 className="text-4xl font-bold text-white mb-2 drop-shadow-lg">
             UPSA Voting System
           </h1>
-          <p className="text-blue-200">
+          <p className="text-blue-200 drop-shadow-lg">
             University of Professional Studies, Accra
           </p>
         </div>
 
-        <Card>
+        <Card className="backdrop-blur-sm bg-white/95">
           {!showOTPInput ? (
             <form onSubmit={handleRequestOTP} className="space-y-4">
               <div>
-                <label className="label text-gray-700">Student Email</label>
+                <label className="label text-gray-700">Student ID</label>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="StudentID@upsamail.edu"
+                  type="text"
+                  value={studentId}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, "");
+                    setStudentId(value);
+                  }}
+                  placeholder="Enter your Student ID"
                   className="input-field"
                   disabled={isLoading}
                   autoFocus
+                  inputMode="numeric"
                 />
                 <p className="mt-1 text-sm text-gray-500">
-                  Use your official UPSA student email
+                  Enter your numeric Student ID (e.g., 10309003)
+                </p>
+                <p className="mt-1 text-xs text-blue-600">
+                  📧 OTP will be sent to{" "}
+                  {studentId
+                    ? `${studentId}@upsamail.edu.gh`
+                    : "your@upsamail.edu.gh"}
                 </p>
               </div>
 
@@ -101,7 +149,7 @@ const LoginPage: React.FC = () => {
                 type="submit"
                 fullWidth
                 isLoading={isLoading}
-                disabled={!email || rateLimit.isBlocked}>
+                disabled={!studentId || rateLimit.isBlocked}>
                 {rateLimit.isBlocked
                   ? `Wait ${rateLimit.resetTime}s`
                   : "Send OTP"}
@@ -128,7 +176,7 @@ const LoginPage: React.FC = () => {
                   autoFocus
                 />
                 <p className="mt-1 text-sm text-gray-500">
-                  OTP sent to {email}
+                  OTP sent to {buildStudentEmail(formatStudentId(studentId))}
                 </p>
               </div>
 
@@ -155,14 +203,14 @@ const LoginPage: React.FC = () => {
                   setOtp("");
                   setLocalError(null);
                 }}>
-                Back to Email
+                Back to Student ID
               </Button>
             </form>
           )}
         </Card>
 
         <div className="text-center mt-6">
-          <p className="text-blue-200 text-sm">
+          <p className="text-blue-200 text-sm drop-shadow-lg">
             ⚡ Secure voting system • One vote per student
           </p>
         </div>
