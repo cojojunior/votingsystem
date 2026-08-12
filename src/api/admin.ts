@@ -1,6 +1,6 @@
 // src/api/admin.ts
 import { supabase } from "./client";
-import { VotingStats, AuditLog } from "../types/admin.types";
+import { VotingStats, AuditLog, SessionProgress } from "../types/admin.types";
 
 // Define types for database records
 interface StudentRecord {
@@ -23,11 +23,6 @@ interface SessionRecord {
   votes_cast: number;
   start_time: string;
   end_time: string;
-  status: string;
-}
-
-interface ElectionConfigRecord {
-  id: number;
   status: string;
 }
 
@@ -87,7 +82,7 @@ export const adminAPI = {
       const { data: sessions } = await supabase.from("sessions").select("*");
 
       const sessionData = sessions as SessionRecord[] | null;
-      const sessionProgress =
+      const sessionProgress: SessionProgress[] =
         sessionData?.map((session) => ({
           id: session.id,
           name: session.name,
@@ -97,9 +92,9 @@ export const adminAPI = {
             session.student_ids.length > 0
               ? ((session.votes_cast || 0) / session.student_ids.length) * 100
               : 0,
-          startTime: session.start_time,
-          endTime: session.end_time,
-          status: session.status,
+          startTime: new Date(session.start_time), // Convert string to Date
+          endTime: new Date(session.end_time), // Convert string to Date
+          status: session.status as "pending" | "active" | "completed",
         })) || [];
 
       // Live votes (last hour)
@@ -144,7 +139,12 @@ export const adminAPI = {
         .limit(limit);
 
       if (error) throw error;
-      return (data || []) as unknown as AuditLog[];
+
+      // Cast the data to AuditLog[] with proper date conversion
+      return (data || []).map((log: any) => ({
+        ...log,
+        timestamp: new Date(log.timestamp),
+      })) as AuditLog[];
     } catch (error) {
       console.error("Error fetching audit logs:", error);
       throw error;
@@ -159,7 +159,7 @@ export const adminAPI = {
           status: "paused",
           paused_at: new Date().toISOString(),
           pause_reason: reason,
-        } as any)
+        })
         .eq("id", 1);
 
       if (updateError) throw updateError;
@@ -168,7 +168,7 @@ export const adminAPI = {
         action: "ELECTION_PAUSED",
         details: { reason },
         timestamp: new Date().toISOString(),
-      } as any);
+      });
 
       if (logError) throw logError;
 
@@ -186,7 +186,7 @@ export const adminAPI = {
         .update({
           status: "active",
           resumed_at: new Date().toISOString(),
-        } as any)
+        })
         .eq("id", 1);
 
       if (updateError) throw updateError;
@@ -194,7 +194,7 @@ export const adminAPI = {
       const { error: logError } = await supabase.from("audit_logs").insert({
         action: "ELECTION_RESUMED",
         timestamp: new Date().toISOString(),
-      } as any);
+      });
 
       if (logError) throw logError;
 
@@ -212,7 +212,7 @@ export const adminAPI = {
         .update({
           status: "completed",
           closed_at: new Date().toISOString(),
-        } as any)
+        })
         .eq("id", 1);
 
       if (updateError) throw updateError;
@@ -220,7 +220,7 @@ export const adminAPI = {
       const { error: logError } = await supabase.from("audit_logs").insert({
         action: "ELECTION_CLOSED",
         timestamp: new Date().toISOString(),
-      } as any);
+      });
 
       if (logError) throw logError;
 
@@ -250,19 +250,29 @@ export const adminAPI = {
 
   getFaultyVotesSummary: async () => {
     try {
+      // Get all faulty vote records
       const { data, error } = await supabase
         .from("audit_logs")
-        .select("action, count")
+        .select("action")
         .in("action", [
           "DUPLICATE_ATTEMPT",
           "MULTIPLE_SELECTION",
           "INVALID_VOTE",
           "BLANK_VOTE",
-        ])
-        .group("action");
+        ]);
 
       if (error) throw error;
-      return data;
+
+      // Manually group by action
+      const grouped = (data || []).reduce((acc: any, curr: any) => {
+        acc[curr.action] = (acc[curr.action] || 0) + 1;
+        return acc;
+      }, {});
+
+      return Object.entries(grouped).map(([action, count]) => ({
+        action,
+        count,
+      }));
     } catch (error) {
       console.error("Error fetching faulty votes summary:", error);
       throw error;
