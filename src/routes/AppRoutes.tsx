@@ -1,14 +1,9 @@
 // src/routes/AppRoutes.tsx
-import React, { lazy, Suspense, useEffect } from "react";
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  Navigate,
-  useNavigate,
-} from "react-router-dom";
+import React, { lazy, Suspense } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { LoadingSpinner } from "../components/common/LoadingSpinner";
 import { useAuthStore } from "../store/authStore";
+import  Layout  from "../components/layout/Layout";
 
 // Student Pages
 const LandingPage = lazy(() => import("../pages/Student/LandingPage"));
@@ -37,24 +32,21 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
   requireAdmin?: boolean;
   requireSuperAdmin?: boolean;
-  redirectTo?: string;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   requireAdmin = false,
   requireSuperAdmin = false,
-  redirectTo = "/login",
 }) => {
   const { isAuthenticated, user, isLoading } = useAuthStore();
 
-  // Show loading while checking authentication
   if (isLoading) {
-    return <LoadingSpinner size="lg" />;
+    return <LoadingSpinner size="lg" className="min-h-screen" />;
   }
 
   if (!isAuthenticated) {
-    return <Navigate to={redirectTo} replace />;
+    return <Navigate to="/login" replace />;
   }
 
   if (requireAdmin && !["admin", "super_admin"].includes(user?.role || "")) {
@@ -68,56 +60,58 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   return <>{children}</>;
 };
 
-// Component to handle redirect based on auth status
-const AuthRedirect: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
-  const { isAuthenticated } = useAuthStore();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate("/dashboard", { replace: true });
-    }
-  }, [isAuthenticated, navigate]);
-
-  return <>{children}</>;
-};
-
 export const AppRoutes: React.FC = () => {
+  const { isAuthenticated } = useAuthStore();
+
   return (
     <BrowserRouter>
       <Suspense
         fallback={<LoadingSpinner size="lg" className="min-h-screen" />}>
         <Routes>
-          {/* Public Routes - Redirect if already logged in */}
+          {/* Public Routes */}
           <Route
             path="/"
             element={
-              <AuthRedirect>
+              <Layout showSidebar={false}>
                 <LandingPage />
-              </AuthRedirect>
+              </Layout>
             }
           />
           <Route
             path="/login"
             element={
-              <AuthRedirect>
+              <Layout showSidebar={false}>
                 <LoginPage />
-              </AuthRedirect>
+              </Layout>
             }
           />
-          <Route path="/results" element={<ResultsPage />} />
+          <Route
+            path="/results"
+            element={
+              <Layout>
+                <ResultsPage />
+              </Layout>
+            }
+          />
 
           {/* Admin Auth */}
-          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route
+            path="/admin/login"
+            element={
+              <Layout showSidebar={false}>
+                <AdminLogin />
+              </Layout>
+            }
+          />
 
           {/* Student Routes */}
           <Route
             path="/dashboard"
             element={
               <ProtectedRoute>
-                <Dashboard />
+                <Layout>
+                  <Dashboard />
+                </Layout>
               </ProtectedRoute>
             }
           />
@@ -125,7 +119,9 @@ export const AppRoutes: React.FC = () => {
             path="/vote"
             element={
               <ProtectedRoute>
-                <VotingPage />
+                <Layout>
+                  <VotingPage />
+                </Layout>
               </ProtectedRoute>
             }
           />
@@ -133,7 +129,9 @@ export const AppRoutes: React.FC = () => {
             path="/confirmation"
             element={
               <ProtectedRoute>
-                <ConfirmationPage />
+                <Layout>
+                  <ConfirmationPage />
+                </Layout>
               </ProtectedRoute>
             }
           />
@@ -143,7 +141,9 @@ export const AppRoutes: React.FC = () => {
             path="/admin/dashboard"
             element={
               <ProtectedRoute requireAdmin>
-                <AdminDashboard />
+                <Layout showSidebar={false}>
+                  <AdminDashboard />
+                </Layout>
               </ProtectedRoute>
             }
           />
@@ -151,7 +151,9 @@ export const AppRoutes: React.FC = () => {
             path="/admin/candidates"
             element={
               <ProtectedRoute requireAdmin>
-                <CandidateManagement />
+                <Layout showSidebar={false}>
+                  <CandidateManagement />
+                </Layout>
               </ProtectedRoute>
             }
           />
@@ -159,7 +161,9 @@ export const AppRoutes: React.FC = () => {
             path="/admin/voters"
             element={
               <ProtectedRoute requireAdmin>
-                <VoterManagement />
+                <Layout showSidebar={false}>
+                  <VoterManagement />
+                </Layout>
               </ProtectedRoute>
             }
           />
@@ -167,7 +171,9 @@ export const AppRoutes: React.FC = () => {
             path="/admin/sessions"
             element={
               <ProtectedRoute requireAdmin>
-                <SessionManagement />
+                <Layout showSidebar={false}>
+                  <SessionManagement />
+                </Layout>
               </ProtectedRoute>
             }
           />
@@ -175,7 +181,9 @@ export const AppRoutes: React.FC = () => {
             path="/admin/reports"
             element={
               <ProtectedRoute requireAdmin>
-                <Reports />
+                <Layout showSidebar={false}>
+                  <Reports />
+                </Layout>
               </ProtectedRoute>
             }
           />
@@ -183,17 +191,17 @@ export const AppRoutes: React.FC = () => {
             path="/admin/audit"
             element={
               <ProtectedRoute requireSuperAdmin>
-                <AuditLog />
+                <Layout showSidebar={false}>
+                  <AuditLog />
+                </Layout>
               </ProtectedRoute>
             }
           />
 
-          {/* Fallback - 404 */}
+          {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
     </BrowserRouter>
   );
 };
-
-
