@@ -17,9 +17,25 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ["react", "react-dom", "react-router-dom"],
-          ui: ["@supabase/supabase-js", "@tanstack/react-query"],
+        manualChunks(id) {
+          // Vendor chunks
+          if (id.includes("node_modules")) {
+            if (
+              id.includes("react") ||
+              id.includes("react-dom") ||
+              id.includes("react-router-dom")
+            ) {
+              return "vendor";
+            }
+            if (
+              id.includes("@supabase") ||
+              id.includes("@tanstack/react-query")
+            ) {
+              return "ui";
+            }
+            // All other node_modules
+            return "vendor";
+          }
         },
       },
     },
