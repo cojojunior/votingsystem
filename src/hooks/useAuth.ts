@@ -1,6 +1,7 @@
-// src/hooks/useAuth.ts
+// src/hooks/useAuth.ts (with error handling)
 import { useState, useEffect } from "react";
 import { authAPI } from "../api/auth";
+import { supabase } from "../api/client";
 import { useAuthStore } from "../store/authStore";
 import { useRateLimit } from "./useRateLimit";
 
@@ -41,12 +42,13 @@ export const useAuth = () => {
         setUser({
           studentId: response.student.id,
           email: response.student.email,
-          sessionId: response.session.id,
+          sessionId: response.session?.id || "default-session",
           votingStatus: "in_progress",
           role: "student",
         });
         return response;
       }
+      return response;
     } catch (error: any) {
       setError(error.message);
       throw error;
@@ -63,19 +65,23 @@ export const useAuth = () => {
   const checkAuth = async () => {
     try {
       const user = await authAPI.getCurrentUser();
-      if (user) {
-        // Fetch student data
-        const { data } = await supabase
+      if (user && user.email) {
+        const { data, error } = await supabase
           .from("students")
           .select("*")
           .eq("email", user.email)
           .single();
 
+        if (error) {
+          console.error("Error fetching student data:", error);
+          return;
+        }
+
         if (data) {
           setUser({
             studentId: data.id,
             email: data.email,
-            sessionId: data.session_id,
+            sessionId: data.session_id || "default-session",
             votingStatus: data.has_voted ? "completed" : "not_started",
             role: data.is_admin ? "admin" : "student",
           });
