@@ -1,7 +1,8 @@
 // src/components/admin/Dashboard/AdminDashboard.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useAdmin } from "../../../hooks/useAdmin";
 import { useAuthStore } from "../../../store/authStore";
+import { useWebSocket } from "../../../hooks/useWebSocket";
 import { Card } from "../../common/Card";
 import { Button } from "../../common/Button";
 import { LoadingSpinner } from "../../common/LoadingSpinner";
@@ -25,6 +26,8 @@ import {
   BarChart3,
   FileText,
   Shield,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 
 export const AdminDashboard: React.FC = () => {
@@ -41,6 +44,16 @@ export const AdminDashboard: React.FC = () => {
   } = useAdmin();
 
   const { user } = useAuthStore();
+  const {
+    isConnected,
+    subscribeToVotes,
+    subscribeToAuditLogs,
+    subscribeToStudents,
+    subscribeToSessions,
+    lastMessage,
+    messages,
+  } = useWebSocket();
+
   const [showPauseModal, setShowPauseModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [pauseReason, setPauseReason] = useState("");
@@ -48,6 +61,7 @@ export const AdminDashboard: React.FC = () => {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [electionStatus, setElectionStatus] =
     useState<ElectionStatus>("not_started");
+  const [recentVotes, setRecentVotes] = useState<any[]>([]);
 
   const isSuperAdmin = user?.role === "super_admin";
   const isAdmin = user?.role === "admin" || user?.role === "super_admin";
@@ -66,7 +80,6 @@ export const AdminDashboard: React.FC = () => {
           return;
         }
 
-        // Use type assertion to fix the 'never' error
         if (data) {
           setElectionStatus(
             (data as { status: string }).status as ElectionStatus,
@@ -82,9 +95,67 @@ export const AdminDashboard: React.FC = () => {
     }
   }, [isAdmin]);
 
-  // Auto-refresh stats
+  // WebSocket subscriptions
   useEffect(() => {
-    if (isLiveMode && isAdmin) {
+    if (!isAdmin) return;
+
+    // Subscribe to vote changes - store unsubscribe functions
+    const unsubscribeVotes = subscribeToVotes((payload) => {
+      console.log("New vote received via WebSocket:", payload);
+      setRecentVotes((prev) => [payload, ...prev].slice(0, 10));
+      if (isLiveMode) {
+        fetchStats();
+        setLastUpdated(new Date());
+      }
+    });
+
+    // Subscribe to audit logs
+    const unsubscribeAudit = subscribeToAuditLogs((payload) => {
+      console.log("New audit log via WebSocket:", payload);
+      if (isLiveMode) {
+        fetchStats();
+        setLastUpdated(new Date());
+      }
+    });
+
+    // Subscribe to student changes
+    const unsubscribeStudents = subscribeToStudents((payload) => {
+      console.log("Student update via WebSocket:", payload);
+      if (isLiveMode) {
+        fetchStats();
+        setLastUpdated(new Date());
+      }
+    });
+
+    // Subscribe to session changes
+    const unsubscribeSessions = subscribeToSessions((payload) => {
+      console.log("Session update via WebSocket:", payload);
+      if (isLiveMode) {
+        fetchStats();
+        setLastUpdated(new Date());
+      }
+    });
+
+    // Cleanup: unsubscribe all when component unmounts or dependencies change
+    return () => {
+      unsubscribeVotes();
+      unsubscribeAudit();
+      unsubscribeStudents();
+      unsubscribeSessions();
+    };
+  }, [
+    isAdmin,
+    isLiveMode,
+    subscribeToVotes,
+    subscribeToAuditLogs,
+    subscribeToStudents,
+    subscribeToSessions,
+    fetchStats,
+  ]);
+
+  // Auto-refresh stats (fallback if WebSocket is not connected)
+  useEffect(() => {
+    if (isLiveMode && isAdmin && !isConnected) {
       const interval = setInterval(() => {
         fetchStats();
         setLastUpdated(new Date());
@@ -92,7 +163,7 @@ export const AdminDashboard: React.FC = () => {
 
       return () => clearInterval(interval);
     }
-  }, [isLiveMode, isAdmin, fetchStats]);
+  }, [isLiveMode, isAdmin, isConnected, fetchStats]);
 
   // Initial fetch
   useEffect(() => {
@@ -263,6 +334,24 @@ export const AdminDashboard: React.FC = () => {
                   "Paused"
                 )}
               </span>
+              <span
+                className={`px-2 py-1 text-xs rounded-full flex items-center gap-1 ${
+                  isConnected
+                    ? "bg-blue-100 text-blue-700"
+                    : "bg-red-100 text-red-700"
+                }`}>
+                {isConnected ? (
+                  <>
+                    <Wifi className="h-3 w-3" />
+                    Connected
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="h-3 w-3" />
+                    Offline
+                  </>
+                )}
+              </span>
             </div>
             <p className="text-gray-600 mt-1">
               Welcome back, {user?.email?.split("@")[0] || "Admin"}
@@ -346,7 +435,38 @@ export const AdminDashboard: React.FC = () => {
         {/* Last Updated */}
         <p className="text-xs text-gray-400 mb-6">
           Last updated: {lastUpdated.toLocaleString()}
+          {isConnected && <span className="ml-2 text-green-500">● Live</span>}
+          {!isConnected && (
+            <span className="ml-2 text-red-500">● Reconnecting...</span>
+          )}
         </p>
+
+        {/* Recent Votes Feed */}
+        {isConnected && recentVotes.length > 0 && (
+          <Card className="mb-6 bg-blue-50 border-blue-200">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-blue-800 flex items-center gap-2">
+                <Wifi className="h-4 w-4" />
+                Live Vote Feed
+              </h3>
+              <span className="text-xs text-blue-600">
+                {recentVotes.length} recent votes
+              </span>
+            </div>
+            <div className="mt-2 space-y-1">
+              {recentVotes.slice(0, 3).map((vote, index) => (
+                <p key={index} className="text-xs text-blue-700">
+                  • New vote recorded at {new Date().toLocaleTimeString()}
+                </p>
+              ))}
+              {recentVotes.length > 3 && (
+                <p className="text-xs text-blue-500">
+                  + {recentVotes.length - 3} more votes
+                </p>
+              )}
+            </div>
+          </Card>
+        )}
 
         {/* Stats Cards */}
         {stats && <StatsCards stats={stats} loading={isLoading} />}
