@@ -10,13 +10,24 @@ import {
   Download,
   AlertCircle,
   Clock,
-  User,
   Activity,
   RefreshCw,
 } from "lucide-react";
 
-export const AuditLog: React.FC = () => {
-  const [logs, setLogs] = useState<any[]>([]);
+interface AuditLogEntry {
+  id: string;
+  student_id: string | null;
+  admin_id: string | null;
+  action: string;
+  details: any;
+  timestamp: string;
+  ip: string | null;
+  user_agent: string | null;
+  created_at: string;
+}
+
+const AuditLog: React.FC = () => {
+  const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -30,7 +41,7 @@ export const AuditLog: React.FC = () => {
   useEffect(() => {
     fetchLogs();
 
-    let interval: NodeJS.Timeout;
+    let interval: any;
     if (autoRefresh) {
       interval = setInterval(fetchLogs, 30000);
     }
@@ -102,20 +113,26 @@ export const AuditLog: React.FC = () => {
   const filteredLogs = logs.filter((log) => {
     const matchesSearch =
       log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.user_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.student_id?.toLowerCase().includes(searchTerm.toLowerCase());
+      log.student_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      log.admin_id?.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSearch;
   });
 
   const exportLogs = () => {
-    const csv = logs.map((log) => ({
+    const csv = filteredLogs.map((log) => ({
       timestamp: new Date(log.timestamp).toLocaleString(),
       action: log.action,
-      user: log.user_email || log.student_id || "System",
+      user: log.student_id || log.admin_id || "System",
       details: JSON.stringify(log.details || {}),
+      ip: log.ip || "-",
     }));
 
-    const headers = Object.keys(csv[0] || {});
+    if (csv.length === 0) {
+      alert("No logs to export");
+      return;
+    }
+
+    const headers = Object.keys(csv[0]);
     const rows = csv.map((row) =>
       headers.map((h) => row[h as keyof typeof row]).join(","),
     );
@@ -127,6 +144,7 @@ export const AuditLog: React.FC = () => {
     a.href = url;
     a.download = `audit_log_${new Date().toISOString().split("T")[0]}.csv`;
     a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   if (isLoading && logs.length === 0) {
@@ -262,7 +280,7 @@ export const AuditLog: React.FC = () => {
                   </td>
                   <td className="px-4 py-3">{getActionBadge(log.action)}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">
-                    {log.user_email || log.student_id || "System"}
+                    {log.student_id || log.admin_id || "System"}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate">
                     {log.details ? (
@@ -305,6 +323,34 @@ export const AuditLog: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Stats Cards - Using the Card component */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+        <Card>
+          <div className="text-center">
+            <p className="text-sm text-gray-500">Total Logs</p>
+            <p className="text-2xl font-bold text-upsa-blue">{logs.length}</p>
+          </div>
+        </Card>
+        <Card>
+          <div className="text-center">
+            <p className="text-sm text-gray-500">Filtered Logs</p>
+            <p className="text-2xl font-bold text-green-600">
+              {filteredLogs.length}
+            </p>
+          </div>
+        </Card>
+        <Card>
+          <div className="text-center">
+            <p className="text-sm text-gray-500">Unique Actions</p>
+            <p className="text-2xl font-bold text-purple-600">
+              {actions.length}
+            </p>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 };
+
+export default AuditLog;

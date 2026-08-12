@@ -18,7 +18,7 @@ import {
   Trash2,
 } from "lucide-react";
 
-export const VoterManagement: React.FC = () => {
+const VoterManagement: React.FC = () => {
   const [voters, setVoters] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +29,7 @@ export const VoterManagement: React.FC = () => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [newVoter, setNewVoter] = useState({
     studentId: "",
     email: "",
@@ -46,17 +47,17 @@ export const VoterManagement: React.FC = () => {
     setIsLoading(true);
     try {
       // Fetch sessions
-      const { data: sessionsData, error: sessionsError } = await supabase
-        .from("sessions")
-        .select("*");
+      const { data: sessionsData, error: sessionsError } = await (
+        supabase.from("sessions") as any
+      ).select("*");
 
       if (sessionsError) throw sessionsError;
       setSessions(sessionsData || []);
 
       // Fetch voters
-      const { data: votersData, error: votersError } = await supabase
-        .from("students")
-        .select("*");
+      const { data: votersData, error: votersError } = await (
+        supabase.from("students") as any
+      ).select("*");
 
       if (votersError) throw votersError;
       setVoters(votersData || []);
@@ -71,60 +72,115 @@ export const VoterManagement: React.FC = () => {
     e.preventDefault();
     if (!csvFile) return;
 
-    setIsLoading(true);
+    setIsSubmitting(true);
     try {
       const reader = new FileReader();
       reader.onload = async (event) => {
         const text = event.target?.result as string;
-        const lines = text.split("\n");
-        // Using the lines variable to read CSV data
-        const csvHeaders = lines[0].split(",");
-        console.log("CSV Headers:", csvHeaders); // Using the headers
+        const lines = text.split("\n").filter((line) => line.trim());
 
-        const students = lines
-          .slice(1)
-          .map((line) => {
-            const values = line.split(",");
-            return {
-              studentId: values[0]?.trim(),
-              email: values[1]?.trim(),
-              gender: values[2]?.trim() || "male",
-              level: values[3]?.trim() || "",
-              programme: values[4]?.trim() || "",
-              sessionId: values[5]?.trim() || null,
-              is_eligible: true,
-              has_voted: false,
-            };
-          })
-          .filter((s) => s.studentId && s.email);
+        if (lines.length < 2) {
+          throw new Error("CSV file is empty or invalid");
+        }
 
-        const { error } = await supabase.from("students").insert(students);
+        // Parse headers - now using the 'headers' variable
+        const headerRow = lines[0].split(",").map((h) => h.trim());
+        const headers = headerRow.reduce(
+          (acc: any, h: string, index: number) => {
+            acc[h] = index;
+            return acc;
+          },
+          {},
+        );
+
+        // Validate required headers
+        const requiredHeaders = ["StudentID", "Email"];
+        const missingHeaders = requiredHeaders.filter((h) => !(h in headers));
+        if (missingHeaders.length > 0) {
+          throw new Error(
+            `Missing required headers: ${missingHeaders.join(", ")}`,
+          );
+        }
+
+        const students = [];
+
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(",").map((v) => v.trim());
+          if (values.every((v) => !v)) continue;
+
+          const student = {
+            student_id: values[headers["StudentID"]] || "",
+            email: values[headers["Email"]] || "",
+            gender:
+              headers["Gender"] !== undefined
+                ? values[headers["Gender"]]?.toLowerCase() || "male"
+                : "male",
+            level:
+              headers["Level"] !== undefined
+                ? values[headers["Level"]] || ""
+                : "",
+            programme:
+              headers["Programme"] !== undefined
+                ? values[headers["Programme"]] || ""
+                : "",
+            session_id:
+              headers["SessionID"] !== undefined
+                ? values[headers["SessionID"]] || null
+                : null,
+            is_eligible: true,
+            has_voted: false,
+          };
+
+          if (student.student_id && student.email) {
+            students.push(student);
+          }
+        }
+
+        if (students.length === 0) {
+          throw new Error("No valid student records found");
+        }
+
+        const { error } = await (supabase.from("students") as any).insert(
+          students,
+        );
 
         if (error) throw error;
+
         await fetchData();
         setShowImportModal(false);
         setCsvFile(null);
+        alert(`Successfully imported ${students.length} students`);
       };
       reader.readAsText(csvFile);
     } catch (err: any) {
       setError(err.message);
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   const handleAddVoter = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsSubmitting(true);
 
     try {
-      const { error } = await supabase.from("students").insert({
-        ...newVoter,
+      const payload = {
+        student_id: newVoter.studentId,
+        email: newVoter.email,
+        gender: newVoter.gender,
+        level: newVoter.level,
+        programme: newVoter.programme,
+        session_id: newVoter.sessionId || null,
         is_eligible: true,
         has_voted: false,
-      });
+      };
+
+      const { error } = await (supabase.from("students") as any).insert(
+        payload,
+      );
 
       if (error) throw error;
+
       await fetchData();
       setShowAddModal(false);
       setNewVoter({
@@ -138,7 +194,7 @@ export const VoterManagement: React.FC = () => {
     } catch (err: any) {
       setError(err.message);
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -146,7 +202,9 @@ export const VoterManagement: React.FC = () => {
     if (!confirm("Are you sure you want to remove this voter?")) return;
 
     try {
-      const { error } = await supabase.from("students").delete().eq("id", id);
+      const { error } = await (supabase.from("students") as any)
+        .delete()
+        .eq("id", id);
 
       if (error) throw error;
       await fetchData();
@@ -156,7 +214,6 @@ export const VoterManagement: React.FC = () => {
   };
 
   const handleDownloadCSV = () => {
-    // Create CSV headers
     const headers = [
       "Student ID",
       "Email",
@@ -167,12 +224,10 @@ export const VoterManagement: React.FC = () => {
       "Voted",
       "Eligible",
     ];
-
-    // Create CSV rows
-    const rows = voters.map((voter) => [
-      voter.student_id,
-      voter.email,
-      voter.gender,
+    const rows = voters.map((voter: any) => [
+      voter.student_id || "",
+      voter.email || "",
+      voter.gender || "",
       voter.level || "",
       voter.programme || "",
       getSessionName(voter.session_id),
@@ -180,13 +235,10 @@ export const VoterManagement: React.FC = () => {
       voter.is_eligible ? "Yes" : "No",
     ]);
 
-    // Combine headers and rows
     const csvContent = [
       headers.join(","),
       ...rows.map((row) => row.join(",")),
     ].join("\n");
-
-    // Create and download file
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -201,10 +253,10 @@ export const VoterManagement: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const filteredVoters = voters.filter((voter) => {
+  const filteredVoters = voters.filter((voter: any) => {
     const matchesSearch =
-      voter.student_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      voter.email.toLowerCase().includes(searchTerm.toLowerCase());
+      voter.student_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      voter.email?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus =
       filterStatus === "all" ||
       (filterStatus === "voted" && voter.has_voted) ||
@@ -215,7 +267,7 @@ export const VoterManagement: React.FC = () => {
   });
 
   const getSessionName = (sessionId: string) => {
-    const session = sessions.find((s) => s.id === sessionId);
+    const session = sessions.find((s: any) => s.id === sessionId);
     return session?.name || "Not Assigned";
   };
 
@@ -252,7 +304,7 @@ export const VoterManagement: React.FC = () => {
     );
   };
 
-  if (isLoading && voters.length === 0) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <LoadingSpinner size="lg" />
@@ -262,9 +314,9 @@ export const VoterManagement: React.FC = () => {
 
   const stats = {
     total: voters.length,
-    voted: voters.filter((v) => v.has_voted).length,
-    notVoted: voters.filter((v) => !v.has_voted).length,
-    eligible: voters.filter((v) => v.is_eligible).length,
+    voted: voters.filter((v: any) => v.has_voted).length,
+    notVoted: voters.filter((v: any) => !v.has_voted).length,
+    eligible: voters.filter((v: any) => v.is_eligible).length,
   };
 
   return (
@@ -353,7 +405,7 @@ export const VoterManagement: React.FC = () => {
             onChange={(e) => setFilterSession(e.target.value)}
             className="input-field">
             <option value="all">All Sessions</option>
-            {sessions.map((s) => (
+            {sessions.map((s: any) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
@@ -363,7 +415,8 @@ export const VoterManagement: React.FC = () => {
         <Button
           variant="secondary"
           size="sm"
-          className="flex items-center gap-1">
+          className="flex items-center gap-1"
+          onClick={fetchData}>
           <Filter className="h-4 w-4" />
           Apply Filters
         </Button>
@@ -406,7 +459,7 @@ export const VoterManagement: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredVoters.map((voter) => (
+              {filteredVoters.map((voter: any) => (
                 <tr
                   key={voter.id}
                   className="hover:bg-gray-50 transition-colors">
@@ -499,7 +552,7 @@ export const VoterManagement: React.FC = () => {
               type="submit"
               fullWidth
               disabled={!csvFile}
-              isLoading={isLoading}>
+              isLoading={isSubmitting}>
               Import Voters
             </Button>
           </div>
@@ -597,7 +650,7 @@ export const VoterManagement: React.FC = () => {
               }
               className="input-field">
               <option value="">Select Session</option>
-              {sessions.map((s) => (
+              {sessions.map((s: any) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>
@@ -623,7 +676,7 @@ export const VoterManagement: React.FC = () => {
               }}>
               Cancel
             </Button>
-            <Button type="submit" fullWidth isLoading={isLoading}>
+            <Button type="submit" fullWidth isLoading={isSubmitting}>
               Add Voter
             </Button>
           </div>
@@ -632,3 +685,5 @@ export const VoterManagement: React.FC = () => {
     </div>
   );
 };
+
+export default VoterManagement;

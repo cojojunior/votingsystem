@@ -6,29 +6,19 @@ import { Modal } from "../../components/common/Modal";
 import { LoadingSpinner } from "../../components/common/LoadingSpinner";
 import { supabase } from "../../api/client";
 import { Candidate, Position } from "../../types/voting.types";
-import {
-  Search,
-  Plus,
-  Edit,
-  Trash2,
-  User,
-  Award,
-  Image,
-  X,
-  Upload,
-} from "lucide-react";
+import { Search, Plus, Edit, Trash2, User, Award, Upload } from "lucide-react";
 
-export const CandidateManagement: React.FC = () => {
+const CandidateManagement: React.FC = () => {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedPosition, setSelectedPosition] = useState<string>("all");
   const [showModal, setShowModal] = useState(false);
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(
     null,
   );
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const [formData, setFormData] = useState<Partial<Candidate>>({
     name: "",
     studentId: "",
@@ -49,21 +39,50 @@ export const CandidateManagement: React.FC = () => {
     setIsLoading(true);
     try {
       // Fetch positions
-      const { data: positionsData, error: positionsError } = await supabase
-        .from("positions")
+      const { data: positionsData, error: positionsError } = await (
+        supabase.from("positions") as any
+      )
         .select("*")
-        .eq("is_active", true);
+        .eq("is_active", true)
+        .order("order");
 
       if (positionsError) throw positionsError;
-      setPositions(positionsData || []);
 
-      // Fetch candidates
-      const { data: candidatesData, error: candidatesError } = await supabase
-        .from("candidates")
-        .select("*, positions(name)");
+      setPositions(
+        (positionsData || []).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description || "",
+          order: p.order || 0,
+          maxSelections: p.max_selections || 1,
+          isActive: p.is_active ?? true,
+          candidates: [],
+        })),
+      );
+
+      // Fetch candidates with position names
+      const { data: candidatesData, error: candidatesError } = await (
+        supabase.from("candidates") as any
+      ).select("*, positions(name)");
 
       if (candidatesError) throw candidatesError;
-      setCandidates(candidatesData || []);
+
+      const transformedCandidates = (candidatesData || []).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        studentId: c.student_id,
+        email: c.email,
+        positionId: c.position_id,
+        position: c.positions?.name || "Unknown",
+        level: c.level || "",
+        programme: c.programme || "",
+        gender: c.gender || "male",
+        imageUrl: c.image_url || "",
+        manifesto: c.manifesto || "",
+        status: c.status || "active",
+        votes: c.votes || 0,
+      }));
+      setCandidates(transformedCandidates);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -71,22 +90,32 @@ export const CandidateManagement: React.FC = () => {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
     try {
+      const payload = {
+        name: formData.name || "",
+        student_id: formData.studentId || "",
+        email: formData.email || "",
+        position_id: formData.positionId || "",
+        level: formData.level || "",
+        programme: formData.programme || "",
+        gender: formData.gender || "male",
+        image_url: formData.imageUrl || "",
+        manifesto: formData.manifesto || "",
+        status: formData.status || "active",
+      };
+
       if (editingCandidate) {
-        // Update
-        const { error } = await supabase
-          .from("candidates")
-          .update(formData)
+        const { error } = await (supabase.from("candidates") as any)
+          .update(payload)
           .eq("id", editingCandidate.id);
 
         if (error) throw error;
       } else {
-        // Create
-        const { error } = await supabase.from("candidates").insert(formData);
+        const { error } = await (supabase.from("candidates") as any).insert(
+          payload,
+        );
 
         if (error) throw error;
       }
@@ -97,7 +126,7 @@ export const CandidateManagement: React.FC = () => {
     } catch (err: any) {
       setError(err.message);
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -105,7 +134,9 @@ export const CandidateManagement: React.FC = () => {
     if (!confirm("Are you sure you want to delete this candidate?")) return;
 
     try {
-      const { error } = await supabase.from("candidates").delete().eq("id", id);
+      const { error } = await (supabase.from("candidates") as any)
+        .delete()
+        .eq("id", id);
 
       if (error) throw error;
       await fetchData();
@@ -129,22 +160,32 @@ export const CandidateManagement: React.FC = () => {
     setEditingCandidate(null);
   };
 
+  const handleEdit = (candidate: Candidate) => {
+    setEditingCandidate(candidate);
+    setFormData(candidate);
+    setShowModal(true);
+  };
+
   const filteredCandidates = candidates.filter((candidate) => {
     const matchesSearch =
       candidate.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       candidate.studentId.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesPosition =
-      selectedPosition === "all" || candidate.positionId === selectedPosition;
-    return matchesSearch && matchesPosition;
+    return matchesSearch;
   });
 
-  if (isLoading && candidates.length === 0) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <LoadingSpinner size="lg" />
       </div>
     );
   }
+
+  const stats = {
+    total: candidates.length,
+    active: candidates.filter((c) => c.status === "active").length,
+    positions: positions.length,
+  };
 
   return (
     <div className="space-y-6">
@@ -168,33 +209,40 @@ export const CandidateManagement: React.FC = () => {
         </Button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-4">
-        <div className="flex-1 min-w-[200px]">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search candidates..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="input-field pl-9"
-            />
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-upsa-blue">{stats.total}</p>
+            <p className="text-sm text-gray-600">Total Candidates</p>
           </div>
-        </div>
-        <div className="w-48">
-          <select
-            value={selectedPosition}
-            onChange={(e) => setSelectedPosition(e.target.value)}
-            className="input-field">
-            <option value="all">All Positions</option>
-            {positions.map((pos) => (
-              <option key={pos.id} value={pos.id}>
-                {pos.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        </Card>
+        <Card>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-green-600">{stats.active}</p>
+            <p className="text-sm text-gray-600">Active Candidates</p>
+          </div>
+        </Card>
+        <Card>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-purple-600">
+              {stats.positions}
+            </p>
+            <p className="text-sm text-gray-600">Total Positions</p>
+          </div>
+        </Card>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search candidates..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="input-field pl-9"
+        />
       </div>
 
       {/* Error Display */}
@@ -205,13 +253,13 @@ export const CandidateManagement: React.FC = () => {
       )}
 
       {/* Candidates Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredCandidates.map((candidate) => {
           const position = positions.find((p) => p.id === candidate.positionId);
           return (
             <Card key={candidate.id} hover>
-              <div className="flex items-start gap-4">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
+              <div className="flex items-start gap-3">
+                <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
                   {candidate.imageUrl ? (
                     <img
                       src={candidate.imageUrl}
@@ -219,7 +267,7 @@ export const CandidateManagement: React.FC = () => {
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <User className="h-8 w-8 text-gray-400" />
+                    <User className="h-6 w-6 text-gray-400" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -255,11 +303,7 @@ export const CandidateManagement: React.FC = () => {
                   variant="secondary"
                   size="sm"
                   className="flex-1"
-                  onClick={() => {
-                    setEditingCandidate(candidate);
-                    setFormData(candidate);
-                    setShowModal(true);
-                  }}>
+                  onClick={() => handleEdit(candidate)}>
                   <Edit className="h-3 w-3 mr-1" />
                   Edit
                 </Button>
@@ -280,7 +324,7 @@ export const CandidateManagement: React.FC = () => {
           <User className="h-12 w-12 text-gray-400 mx-auto mb-3" />
           <p className="text-gray-600">No candidates found</p>
           <p className="text-sm text-gray-400">
-            Try adjusting your filters or add a new candidate
+            Try adjusting your search or add a new candidate
           </p>
         </div>
       )}
@@ -294,10 +338,15 @@ export const CandidateManagement: React.FC = () => {
         }}
         title={editingCandidate ? "Edit Candidate" : "Add New Candidate"}
         size="lg">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmit();
+          }}
+          className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="label">Full Name</label>
+              <label className="label">Full Name *</label>
               <input
                 type="text"
                 value={formData.name || ""}
@@ -309,7 +358,7 @@ export const CandidateManagement: React.FC = () => {
               />
             </div>
             <div>
-              <label className="label">Student ID</label>
+              <label className="label">Student ID *</label>
               <input
                 type="text"
                 value={formData.studentId || ""}
@@ -324,7 +373,7 @@ export const CandidateManagement: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="label">Email</label>
+              <label className="label">Email *</label>
               <input
                 type="email"
                 value={formData.email || ""}
@@ -336,7 +385,7 @@ export const CandidateManagement: React.FC = () => {
               />
             </div>
             <div>
-              <label className="label">Position</label>
+              <label className="label">Position *</label>
               <select
                 value={formData.positionId || ""}
                 onChange={(e) =>
@@ -465,7 +514,7 @@ export const CandidateManagement: React.FC = () => {
               }}>
               Cancel
             </Button>
-            <Button type="submit" fullWidth isLoading={isLoading}>
+            <Button type="submit" fullWidth isLoading={isSubmitting}>
               {editingCandidate ? "Update Candidate" : "Add Candidate"}
             </Button>
           </div>
@@ -474,3 +523,5 @@ export const CandidateManagement: React.FC = () => {
     </div>
   );
 };
+
+export default CandidateManagement;

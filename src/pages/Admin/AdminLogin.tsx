@@ -1,18 +1,18 @@
 // src/pages/Admin/AdminLogin.tsx
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../hooks/useAuth";
+import { useAuthStore } from "../../store/authStore";
 import { Card } from "../../components/common/Card";
 import { Button } from "../../components/common/Button";
 import { Shield, Lock, Mail } from "lucide-react";
 
-export const AdminLogin: React.FC = () => {
+const AdminLogin: React.FC = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { setUser } = useAuth();
+  const { setUser } = useAuthStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,7 +66,7 @@ export const AdminLogin: React.FC = () => {
             )}
 
             <div>
-              <label className="label">Admin Email</label>
+              <label className="label text-gray-700">Admin Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <input
@@ -81,7 +81,7 @@ export const AdminLogin: React.FC = () => {
             </div>
 
             <div>
-              <label className="label">Password</label>
+              <label className="label text-gray-700">Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <input
@@ -114,3 +114,5 @@ export const AdminLogin: React.FC = () => {
     </div>
   );
 };
+
+export default AdminLogin;

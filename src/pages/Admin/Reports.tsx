@@ -8,14 +8,13 @@ import {
   Download,
   FileText,
   BarChart2,
-  PieChart,
   Users,
   Award,
   TrendingUp,
   FileDown,
 } from "lucide-react";
 
-export const Reports: React.FC = () => {
+const Reports: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reportData, setReportData] = useState<any>(null);
@@ -30,17 +29,31 @@ export const Reports: React.FC = () => {
   const fetchReportData = async () => {
     setIsLoading(true);
     try {
-      // Fetch overview stats
-      const { data: students } = await supabase.from("students").select("*");
+      // Fetch students
+      const { data: studentsData, error: studentsError } = await (
+        supabase.from("students") as any
+      ).select("*");
 
-      const { data: votes } = await supabase.from("votes").select("*");
+      if (studentsError) throw studentsError;
 
-      const { data: candidates } = await supabase
-        .from("candidates")
-        .select("*, positions(name)");
+      // Fetch votes
+      const { data: votesData, error: votesError } = await (
+        supabase.from("votes") as any
+      ).select("*");
 
-      const { data: auditLogs } = await supabase
-        .from("audit_logs")
+      if (votesError) throw votesError;
+
+      // Fetch candidates with positions
+      const { data: candidatesData, error: candidatesError } = await (
+        supabase.from("candidates") as any
+      ).select("*, positions(name)");
+
+      if (candidatesError) throw candidatesError;
+
+      // Fetch audit logs for faulty votes
+      const { data: auditLogsData, error: auditLogsError } = await (
+        supabase.from("audit_logs") as any
+      )
         .select("*")
         .in("action", [
           "DUPLICATE_ATTEMPT",
@@ -49,33 +62,41 @@ export const Reports: React.FC = () => {
           "BLANK_VOTE",
         ]);
 
-      const totalStudents = students?.length || 0;
-      const totalVotes = students?.filter((s) => s.has_voted).length || 0;
-      const totalCandidates = candidates?.length || 0;
+      if (auditLogsError) throw auditLogsError;
+
+      const students = studentsData || [];
+      const votes = votesData || [];
+      const candidates = candidatesData || [];
+      const auditLogs = auditLogsData || [];
+
+      const totalStudents = students.length;
+      const totalVotes = students.filter((s: any) => s.has_voted).length;
+      const totalCandidates = candidates.length;
 
       // Calculate gender distribution
       const maleVotes =
-        students?.filter((s) => s.gender === "male" && s.has_voted).length || 0;
+        students.filter((s: any) => s.gender === "male" && s.has_voted)
+          .length || 0;
       const femaleVotes =
-        students?.filter((s) => s.gender === "female" && s.has_voted).length ||
-        0;
+        students.filter((s: any) => s.gender === "female" && s.has_voted)
+          .length || 0;
 
       // Faulty votes
       const faultyVotes = {
         duplicateAttempts:
-          auditLogs?.filter((l) => l.action === "DUPLICATE_ATTEMPT").length ||
-          0,
+          auditLogs.filter((l: any) => l.action === "DUPLICATE_ATTEMPT")
+            .length || 0,
         multipleSelections:
-          auditLogs?.filter((l) => l.action === "MULTIPLE_SELECTION").length ||
-          0,
+          auditLogs.filter((l: any) => l.action === "MULTIPLE_SELECTION")
+            .length || 0,
         invalidVotes:
-          auditLogs?.filter((l) => l.action === "INVALID_VOTE").length || 0,
+          auditLogs.filter((l: any) => l.action === "INVALID_VOTE").length || 0,
         blankVotes:
-          auditLogs?.filter((l) => l.action === "BLANK_VOTE").length || 0,
+          auditLogs.filter((l: any) => l.action === "BLANK_VOTE").length || 0,
       };
 
       // Position results
-      const positionResults = candidates?.reduce((acc: any, candidate: any) => {
+      const positionResults = candidates.reduce((acc: any, candidate: any) => {
         const positionName = candidate.positions?.name || "Unknown";
         if (!acc[positionName]) {
           acc[positionName] = {
@@ -85,7 +106,7 @@ export const Reports: React.FC = () => {
           };
         }
         const voteCount =
-          votes?.filter((v) => v.candidate_id === candidate.id).length || 0;
+          votes.filter((v: any) => v.candidate_id === candidate.id).length || 0;
         acc[positionName].candidates.push({
           name: candidate.name,
           votes: voteCount,
@@ -106,7 +127,7 @@ export const Reports: React.FC = () => {
             : 0,
         },
         faultyVotes,
-        positionResults: Object.values(positionResults || {}),
+        positionResults: Object.values(positionResults),
         sessionData: {
           // Would come from sessions table
         },
@@ -129,13 +150,15 @@ export const Reports: React.FC = () => {
     a.href = url;
     a.download = `${selectedReport}_report_${new Date().toISOString().split("T")[0]}.csv`;
     a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   const convertToCSV = (data: any) => {
     if (!data) return "";
     if (Array.isArray(data)) {
+      if (data.length === 0) return "No data available";
       const headers = Object.keys(data[0] || {});
-      const rows = data.map((item) =>
+      const rows = data.map((item: any) =>
         headers.map((h) => item[h] || "").join(","),
       );
       return [headers.join(","), ...rows].join("\n");
@@ -286,6 +309,59 @@ export const Reports: React.FC = () => {
           </div>
         );
 
+      case "voters":
+        const overviewData = reportData.overview;
+        return (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="font-semibold text-gray-900 mb-2">
+                  Voter Demographics
+                </h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Male</span>
+                    <span className="font-medium">
+                      {overviewData.maleVotes}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Female</span>
+                    <span className="font-medium">
+                      {overviewData.femaleVotes}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-200 pt-2">
+                    <span className="text-gray-600">Total</span>
+                    <span className="font-bold">{overviewData.totalVotes}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="font-semibold text-gray-900 mb-2">
+                  Voter Turnout
+                </h4>
+                <div className="text-center">
+                  <p className="text-4xl font-bold text-upsa-blue">
+                    {overviewData.voterTurnout}%
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    of {overviewData.totalStudents} eligible voters
+                  </p>
+                  <div className="mt-2 w-full bg-gray-200 rounded-full h-2.5">
+                    <div
+                      className="bg-upsa-blue h-2.5 rounded-full"
+                      style={{
+                        width: `${Math.min(parseFloat(overviewData.voterTurnout), 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -351,60 +427,64 @@ export const Reports: React.FC = () => {
       </Card>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-upsa-blue/10 rounded-lg flex items-center justify-center">
-              <FileText className="h-5 w-5 text-upsa-blue" />
+      {reportData && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-upsa-blue/10 rounded-lg flex items-center justify-center">
+                <FileText className="h-5 w-5 text-upsa-blue" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900">
+                  {reportData.overview?.totalVotes || 0}
+                </p>
+                <p className="text-xs text-gray-500">Total Votes</p>
+              </div>
             </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">
-                {reportData?.overview?.totalVotes || 0}
-              </p>
-              <p className="text-xs text-gray-500">Total Votes</p>
+          </Card>
+          <Card>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <Users className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900">
+                  {reportData.overview?.voterTurnout || 0}%
+                </p>
+                <p className="text-xs text-gray-500">Turnout</p>
+              </div>
             </div>
-          </div>
-        </Card>
-        <Card>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-              <Users className="h-5 w-5 text-green-600" />
+          </Card>
+          <Card>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                <Award className="h-5 w-5 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900">
+                  {reportData.overview?.totalCandidates || 0}
+                </p>
+                <p className="text-xs text-gray-500">Candidates</p>
+              </div>
             </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">
-                {reportData?.overview?.voterTurnout || 0}%
-              </p>
-              <p className="text-xs text-gray-500">Turnout</p>
+          </Card>
+          <Card>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                <TrendingUp className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900">
+                  {reportData.faultyVotes?.total || 0}
+                </p>
+                <p className="text-xs text-gray-500">Faulty Votes</p>
+              </div>
             </div>
-          </div>
-        </Card>
-        <Card>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Award className="h-5 w-5 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">
-                {reportData?.overview?.totalCandidates || 0}
-              </p>
-              <p className="text-xs text-gray-500">Candidates</p>
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-              <TrendingUp className="h-5 w-5 text-red-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">
-                {reportData?.faultyVotes?.total || 0}
-              </p>
-              <p className="text-xs text-gray-500">Faulty Votes</p>
-            </div>
-          </div>
-        </Card>
-      </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };
+
+export default Reports;

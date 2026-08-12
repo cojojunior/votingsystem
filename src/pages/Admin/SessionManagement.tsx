@@ -18,7 +18,7 @@ import {
   Plus,
 } from "lucide-react";
 
-export const SessionManagement: React.FC = () => {
+const SessionManagement: React.FC = () => {
   const [sessions, setSessions] = useState<VotingSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,10 +26,11 @@ export const SessionManagement: React.FC = () => {
   const [editingSession, setEditingSession] = useState<VotingSession | null>(
     null,
   );
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<Partial<VotingSession>>({
     name: "Session 1",
     startTime: new Date(),
-    endTime: new Date(),
+    endTime: new Date(Date.now() + 3 * 60 * 60 * 1000),
     totalStudents: 2000,
     status: "pending",
   });
@@ -41,13 +42,27 @@ export const SessionManagement: React.FC = () => {
   const fetchSessions = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("sessions")
+      const { data, error } = await (supabase.from("sessions") as any)
         .select("*")
         .order("start_time", { ascending: true });
 
       if (error) throw error;
-      setSessions(data || []);
+
+      const transformedSessions = (data || []).map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        startTime: new Date(s.start_time),
+        endTime: new Date(s.end_time),
+        studentIds: s.student_ids || [],
+        isActive: s.status === "active",
+        status: s.status || "pending",
+        totalStudents: s.student_ids?.length || 0,
+        votesCast: s.votes_cast || 0,
+        percentage: s.student_ids?.length
+          ? ((s.votes_cast || 0) / s.student_ids.length) * 100
+          : 0,
+      }));
+      setSessions(transformedSessions);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -55,32 +70,31 @@ export const SessionManagement: React.FC = () => {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
     try {
+      const payload = {
+        name: formData.name || "Session 1",
+        start_time:
+          formData.startTime?.toISOString() || new Date().toISOString(),
+        end_time:
+          formData.endTime?.toISOString() ||
+          new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+        status: formData.status || "pending",
+        student_ids: [],
+        votes_cast: 0,
+      };
+
       if (editingSession) {
-        const { error } = await supabase
-          .from("sessions")
-          .update({
-            name: formData.name,
-            start_time: formData.startTime,
-            end_time: formData.endTime,
-            status: formData.status,
-          })
+        const { error } = await (supabase.from("sessions") as any)
+          .update(payload)
           .eq("id", editingSession.id);
 
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("sessions").insert({
-          name: formData.name,
-          start_time: formData.startTime,
-          end_time: formData.endTime,
-          student_ids: [],
-          status: "pending",
-          votes_cast: 0,
-        });
+        const { error } = await (supabase.from("sessions") as any).insert(
+          payload,
+        );
 
         if (error) throw error;
       }
@@ -91,7 +105,7 @@ export const SessionManagement: React.FC = () => {
     } catch (err: any) {
       setError(err.message);
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -99,7 +113,9 @@ export const SessionManagement: React.FC = () => {
     if (!confirm("Are you sure you want to delete this session?")) return;
 
     try {
-      const { error } = await supabase.from("sessions").delete().eq("id", id);
+      const { error } = await (supabase.from("sessions") as any)
+        .delete()
+        .eq("id", id);
 
       if (error) throw error;
       await fetchSessions();
@@ -110,8 +126,7 @@ export const SessionManagement: React.FC = () => {
 
   const handleStatusChange = async (id: string, status: string) => {
     try {
-      const { error } = await supabase
-        .from("sessions")
+      const { error } = await (supabase.from("sessions") as any)
         .update({ status })
         .eq("id", id);
 
@@ -126,7 +141,7 @@ export const SessionManagement: React.FC = () => {
     setFormData({
       name: "Session 1",
       startTime: new Date(),
-      endTime: new Date(),
+      endTime: new Date(Date.now() + 3 * 60 * 60 * 1000),
       totalStudents: 2000,
       status: "pending",
     });
@@ -134,7 +149,7 @@ export const SessionManagement: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    const variants = {
+    const variants: Record<string, string> = {
       pending: "bg-yellow-100 text-yellow-700",
       active: "bg-green-100 text-green-700",
       completed: "bg-gray-100 text-gray-700",
@@ -143,13 +158,13 @@ export const SessionManagement: React.FC = () => {
 
     return (
       <span
-        className={`px-2 py-0.5 text-xs rounded-full ${variants[status as keyof typeof variants] || variants.pending}`}>
+        className={`px-2 py-0.5 text-xs rounded-full ${variants[status] || variants.pending}`}>
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </span>
     );
   };
 
-  if (isLoading && sessions.length === 0) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <LoadingSpinner size="lg" />
@@ -292,13 +307,24 @@ export const SessionManagement: React.FC = () => {
           resetForm();
         }}
         title={editingSession ? "Edit Session" : "Create Session"}>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmit();
+          }}
+          className="space-y-4">
           <div>
             <label className="label">Session Name</label>
             <select
               value={formData.name || "Session 1"}
               onChange={(e) =>
-                setFormData({ ...formData, name: e.target.value })
+                setFormData({
+                  ...formData,
+                  name: e.target.value as
+                    | "Session 1"
+                    | "Session 2"
+                    | "Session 3",
+                })
               }
               className="input-field"
               required>
@@ -357,7 +383,7 @@ export const SessionManagement: React.FC = () => {
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  totalStudents: parseInt(e.target.value),
+                  totalStudents: parseInt(e.target.value) || 0,
                 })
               }
               className="input-field"
@@ -373,7 +399,14 @@ export const SessionManagement: React.FC = () => {
               <select
                 value={formData.status || "pending"}
                 onChange={(e) =>
-                  setFormData({ ...formData, status: e.target.value as any })
+                  setFormData({
+                    ...formData,
+                    status: e.target.value as
+                      | "pending"
+                      | "active"
+                      | "completed"
+                      | "cancelled",
+                  })
                 }
                 className="input-field">
                 <option value="pending">Pending</option>
@@ -395,7 +428,7 @@ export const SessionManagement: React.FC = () => {
               }}>
               Cancel
             </Button>
-            <Button type="submit" fullWidth isLoading={isLoading}>
+            <Button type="submit" fullWidth isLoading={isSubmitting}>
               {editingSession ? "Update Session" : "Create Session"}
             </Button>
           </div>
@@ -404,3 +437,5 @@ export const SessionManagement: React.FC = () => {
     </div>
   );
 };
+
+export default SessionManagement;
