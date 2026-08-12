@@ -1,6 +1,12 @@
-// src/routes/AppRoutes.tsx (Updated)
-import React, { lazy, Suspense } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+// src/routes/AppRoutes.tsx
+import React, { lazy, Suspense, useEffect } from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+} from "react-router-dom";
 import { LoadingSpinner } from "../components/common/LoadingSpinner";
 import { useAuthStore } from "../store/authStore";
 
@@ -31,17 +37,24 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
   requireAdmin?: boolean;
   requireSuperAdmin?: boolean;
+  redirectTo?: string;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   requireAdmin = false,
   requireSuperAdmin = false,
+  redirectTo = "/login",
 }) => {
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated, user, isLoading } = useAuthStore();
+
+  // Show loading while checking authentication
+  if (isLoading) {
+    return <LoadingSpinner size="lg" />;
+  }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={redirectTo} replace />;
   }
 
   if (requireAdmin && !["admin", "super_admin"].includes(user?.role || "")) {
@@ -55,14 +68,45 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   return <>{children}</>;
 };
 
+// Component to handle redirect based on auth status
+const AuthRedirect: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const { isAuthenticated } = useAuthStore();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
+  return <>{children}</>;
+};
+
 export const AppRoutes: React.FC = () => {
   return (
     <BrowserRouter>
-      <Suspense fallback={<LoadingSpinner size="lg" />}>
+      <Suspense
+        fallback={<LoadingSpinner size="lg" className="min-h-screen" />}>
         <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
+          {/* Public Routes - Redirect if already logged in */}
+          <Route
+            path="/"
+            element={
+              <AuthRedirect>
+                <LandingPage />
+              </AuthRedirect>
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              <AuthRedirect>
+                <LoginPage />
+              </AuthRedirect>
+            }
+          />
           <Route path="/results" element={<ResultsPage />} />
 
           {/* Admin Auth */}
@@ -144,10 +188,12 @@ export const AppRoutes: React.FC = () => {
             }
           />
 
-          {/* Fallback */}
+          {/* Fallback - 404 */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
     </BrowserRouter>
   );
 };
+
+
